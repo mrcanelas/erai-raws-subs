@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { AddonBuilder } from "@stremio-addon/zod";
 import { getRouter } from "@stremio-addon/node-express";
+import cors from "cors";
 import express from "express";
 import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
@@ -18,6 +19,13 @@ const addonInterface = builder.getInterface();
 
 const app = express();
 const port = Number(process.env.PORT) || 7000;
+
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "HEAD", "OPTIONS"],
+  }),
+);
 
 app.get(
   "/subtitle/:id",

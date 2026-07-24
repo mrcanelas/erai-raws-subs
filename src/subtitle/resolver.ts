@@ -52,7 +52,9 @@ export async function resolveSubtitles(
   const subtitles: SubtitleSchema[] = rows.map((row) => ({
     id: row.id,
     lang: row.language,
-    url: `${baseUrl}/subtitle/${row.id}`,
+    // Trailing .ass is required for stremio-video ASS track detection
+    // (see subtitleTypes.hasASSExtension in the ass-support fork).
+    url: `${baseUrl}/subtitle/${row.id}.ass`,
   }));
 
   logger.info("subtitle hit", {
