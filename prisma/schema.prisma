@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -17,7 +17,7 @@ model Anime {
   tvdb            String?    @unique
   canonicalTitle  String     @map("canonical_title")
   aliases         Json       @default("[]")
-  startDate       DateTime?  @map("start_date") @db.Date
+  startDate       DateTime?  @map("start_date")
   episodeCount    Int?       @map("episode_count")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
