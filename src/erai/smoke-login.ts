@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { EraiClient } from "./client.js";
 import { hasWordPressLoginCookie } from "./cookies.js";
 import { logger } from "../utils/logger.js";

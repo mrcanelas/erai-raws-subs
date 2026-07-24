@@ -7,7 +7,8 @@ import {
 } from "./cookies.js";
 import { EraiAuthError, type EraiCredentials } from "./types.js";
 
-const LOGIN_PATH = "/account-login/";
+const LOGIN_PATH = "account-login/";
+const LOGIN_URL_PATH = "/account-login/";
 
 export async function login(
   http: Got,
@@ -19,6 +20,7 @@ export async function login(
   logger.info("erai login starting");
 
   // Warm DDoS-Guard + wordpress_test_cookie before posting credentials.
+  // got prefixUrl forbids a leading slash on the path.
   const loginPage = await http.get(LOGIN_PATH, {
     throwHttpErrors: false,
   });
@@ -45,7 +47,7 @@ export async function login(
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       origin: baseUrl,
-      referer: `${baseUrl}${LOGIN_PATH}`,
+      referer: `${baseUrl}${LOGIN_URL_PATH}`,
     },
     followRedirect: true,
     throwHttpErrors: false,
