@@ -9,6 +9,7 @@ datasource db {
 
 model Anime {
   id              String     @id @default(cuid())
+  sourcePath      String     @unique @map("source_path")
   imdb            String?    @unique
   kitsu           String?    @unique
   anilist         String?    @unique
