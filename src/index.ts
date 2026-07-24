@@ -1,8 +1,11 @@
+import "dotenv/config";
 import { AddonBuilder } from "@stremio-addon/zod";
 import { getRouter } from "@stremio-addon/node-express";
 import express from "express";
 import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
+import { getEraiClient } from "./erai/singleton.js";
+import { createSubtitleProxyHandler } from "./subtitle/serve.js";
 import { logger } from "./utils/logger.js";
 
 const builder = new AddonBuilder(manifest);
@@ -15,6 +18,11 @@ const addonInterface = builder.getInterface();
 
 const app = express();
 const port = Number(process.env.PORT) || 7000;
+
+app.get(
+  "/subtitle/:id",
+  createSubtitleProxyHandler(() => getEraiClient()),
+);
 
 app.use("/", getRouter(addonInterface));
 app.get("/", (_req, res) => {

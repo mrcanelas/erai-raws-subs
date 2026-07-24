@@ -1,8 +1,11 @@
 import type {
   ContentTypeSchema,
-  SubtitleSchema,
   SubtitlesResponseSchema,
 } from "@stremio-addon/zod";
+import {
+  resolveSubtitles,
+  type ResolveSubtitlesArgs,
+} from "../subtitle/resolver.js";
 import { logger } from "../utils/logger.js";
 
 export type ParsedSubtitleId = {
@@ -11,12 +14,7 @@ export type ParsedSubtitleId = {
   episode?: number;
 };
 
-export type ResolveSubtitlesArgs = {
-  type: ContentTypeSchema;
-  imdbId: string;
-  season?: number;
-  episode?: number;
-};
+export type { ResolveSubtitlesArgs };
 
 /**
  * Parses Stremio video ids:
@@ -40,16 +38,6 @@ export function parseSubtitleId(id: string): ParsedSubtitleId | null {
   }
 
   return { imdbId };
-}
-
-/**
- * Stub resolver — returns no subtitles until the DB/cache layer exists.
- * Never crawls Erai-Raws during requests.
- */
-export async function resolveSubtitles(
-  _args: ResolveSubtitlesArgs,
-): Promise<SubtitleSchema[]> {
-  return [];
 }
 
 export async function handleSubtitlesRequest(args: {

@@ -87,6 +87,16 @@ export class EraiClient {
 
   private resolveUrl(pathnameOrUrl: string): string {
     if (/^https?:\/\//i.test(pathnameOrUrl)) {
+      const absolute = new URL(pathnameOrUrl);
+      const base = new URL(
+        this.baseUrl.endsWith("/") ? this.baseUrl : `${this.baseUrl}/`,
+      );
+
+      // Keep same-origin downloads on the prefixUrl client so cookies stick.
+      if (absolute.origin === base.origin) {
+        return `${absolute.pathname.replace(/^\/+/, "")}${absolute.search}`;
+      }
+
       return pathnameOrUrl;
     }
 

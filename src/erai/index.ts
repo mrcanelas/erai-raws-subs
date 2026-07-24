@@ -1,5 +1,6 @@
 export { EraiClient } from "./client.js";
 export { downloadSubtitle } from "./downloader.js";
+export { getEraiClient } from "./singleton.js";
 export {
   EraiAuthError,
   EraiHttpError,
