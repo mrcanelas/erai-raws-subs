@@ -6,6 +6,10 @@ export {
   runCrawlerSchedule,
   schedulerConfigFromEnv,
 } from "./scheduler.js";
+export {
+  isCrawlerEnabledInProcess,
+  startBackgroundCrawler,
+} from "./start.js";
 export type { CrawlOptions, CrawlStats, DirectoryEntry } from "./types.js";
 export type {
   ScheduledCrawl,

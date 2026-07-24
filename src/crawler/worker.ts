@@ -25,7 +25,6 @@ async function main(): Promise<void> {
   await runCrawlerSchedule(
     config,
     async (rootDirectory, delayMs) => {
-      // Crawler traversal state is per run, so each sync gets a fresh instance.
       const crawler = new EraiCrawler(client, prisma);
       return crawler.crawl({ rootDirectory, delayMs });
     },

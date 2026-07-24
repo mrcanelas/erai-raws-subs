@@ -83,3 +83,9 @@ test("scheduler never overlaps crawls", async () => {
   assert.equal(calls, 2);
   assert.equal(maximumActive, 1);
 });
+
+test("isCrawlerEnabledInProcess defaults to true", async () => {
+  const { isCrawlerEnabledInProcess } = await import("./start.js");
+  assert.equal(isCrawlerEnabledInProcess({}), true);
+  assert.equal(isCrawlerEnabledInProcess({ CRAWL_ENABLED: "false" }), false);
+});

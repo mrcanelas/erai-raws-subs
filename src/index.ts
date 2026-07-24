@@ -5,6 +5,7 @@ import cors from "cors";
 import express from "express";
 import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
+import { startBackgroundCrawler } from "./crawler/start.js";
 import { getEraiClient } from "./erai/singleton.js";
 import { createSubtitleProxyHandler } from "./subtitle/serve.js";
 import { logger } from "./utils/logger.js";
@@ -19,6 +20,7 @@ const addonInterface = builder.getInterface();
 
 const app = express();
 const port = Number(process.env.PORT) || 7000;
+const crawlerAbort = new AbortController();
 
 app.use(
   cors({
@@ -42,4 +44,16 @@ app.listen(port, () => {
     port,
     manifest: `http://127.0.0.1:${port}/manifest.json`,
   });
+
+  // Crawl never runs inside subtitle request handlers — only as a
+  // background loop in this process (or via npm run crawl:worker).
+  startBackgroundCrawler({ signal: crawlerAbort.signal });
 });
+
+function stop(signal: NodeJS.Signals): void {
+  logger.info("addon shutting down", { signal });
+  crawlerAbort.abort();
+}
+
+process.once("SIGINT", () => stop("SIGINT"));
+process.once("SIGTERM", () => stop("SIGTERM"));
