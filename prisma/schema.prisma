@@ -10,12 +10,15 @@ datasource db {
 model Anime {
   id              String     @id @default(cuid())
   sourcePath      String     @unique @map("source_path")
-  imdb            String?    @unique
+  // Not unique: multi-season Erai folders often share one IMDb series id.
+  imdb            String?
   kitsu           String?    @unique
   anilist         String?    @unique
   mal             String?    @unique
   tmdb            String?    @unique
   tvdb            String?    @unique
+  // Stremio season number for this Erai entry (from imdb_mapping.fromSeason).
+  imdbSeason      Int?       @map("imdb_season")
   canonicalTitle  String     @map("canonical_title")
   aliases         Json       @default("[]")
   startDate       DateTime?  @map("start_date")
@@ -24,6 +27,7 @@ model Anime {
   updatedAt       DateTime   @updatedAt @map("updated_at")
   subtitles       Subtitle[]
 
+  @@index([imdb])
   @@index([canonicalTitle])
   @@map("anime")
 }

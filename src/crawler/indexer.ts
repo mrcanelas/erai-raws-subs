@@ -1,6 +1,10 @@
 ﻿import type { Anime, PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger.js";
 import type { EraiClient } from "../erai/client.js";
+import {
+  enrichAnimeMetadata,
+  MetadataResolver,
+} from "../metadata/index.js";
 import { episodeFromPathAndFile } from "./episode.js";
 import { detectLanguage } from "./language.js";
 import { parseDirectoryListing } from "./parser.js";
@@ -42,12 +46,16 @@ export class EraiCrawler {
   private readonly visited = new Set<string>();
   private readonly animeCache = new Map<string, Anime>();
   private readonly animeCounted = new Set<string>();
+  private readonly metadata: MetadataResolver;
   private lastRequestAt = 0;
 
   constructor(
     private readonly client: EraiClient,
     private readonly db: PrismaClient,
-  ) {}
+    metadata?: MetadataResolver,
+  ) {
+    this.metadata = metadata ?? new MetadataResolver();
+  }
 
   async crawl(options: CrawlOptions): Promise<CrawlStats> {
     const stats = createStats();
@@ -61,6 +69,12 @@ export class EraiCrawler {
 
     try {
       await this.walk(rootDirectory, options.delayMs, stats);
+
+      // Metadata lookups happen after indexing — never during subtitle requests.
+      await enrichAnimeMetadata(this.db, this.metadata, {
+        missingImdbOnly: true,
+        delayMs: Math.max(options.delayMs, 200),
+      });
 
       const status = stats.errors > 0 ? "error" : "idle";
       await this.db.syncState.upsert({
@@ -153,10 +167,12 @@ export class EraiCrawler {
       const now = new Date();
       const release = [parts[2], ...releaseSegments].join("/");
 
+      const season = anime.imdbSeason ?? 1;
+
       const existing = await this.db.subtitle.findFirst({
         where: {
           animeId: anime.id,
-          season: 1,
+          season,
           episode: episode.episode,
           language,
           fileName: entry.name,
@@ -180,7 +196,7 @@ export class EraiCrawler {
         await this.db.subtitle.create({
           data: {
             animeId: anime.id,
-            season: 1,
+            season,
             episode: episode.episode,
             language,
             fileName: entry.name,

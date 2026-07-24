@@ -26,11 +26,13 @@ function publicBaseUrl(): string {
 export async function resolveSubtitles(
   args: ResolveSubtitlesArgs,
 ): Promise<SubtitleSchema[]> {
-  const anime = await prisma.anime.findUnique({
+  // Multiple Erai folders (e.g. S1/S2) may share one IMDb id.
+  const animeRows = await prisma.anime.findMany({
     where: { imdb: args.imdbId },
+    select: { id: true },
   });
 
-  if (!anime) {
+  if (animeRows.length === 0) {
     logger.info("subtitle miss: no anime for imdb", { imdbId: args.imdbId });
     return [];
   }
@@ -40,7 +42,7 @@ export async function resolveSubtitles(
 
   const rows = await prisma.subtitle.findMany({
     where: {
-      animeId: anime.id,
+      animeId: { in: animeRows.map((row) => row.id) },
       season,
       ...(episode === null ? {} : { episode }),
     },
