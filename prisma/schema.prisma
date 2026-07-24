@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Anime {
+  id              String     @id @default(cuid())
+  imdb            String?    @unique
+  kitsu           String?    @unique
+  anilist         String?    @unique
+  mal             String?    @unique
+  tmdb            String?    @unique
+  tvdb            String?    @unique
+  canonicalTitle  String     @map("canonical_title")
+  aliases         Json       @default("[]")
+  startDate       DateTime?  @map("start_date") @db.Date
+  episodeCount    Int?       @map("episode_count")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  subtitles       Subtitle[]
+
+  @@index([canonicalTitle])
+  @@map("anime")
+}
+
+model Subtitle {
+  id            String    @id @default(cuid())
+  animeId       String    @map("anime_id")
+  season        Int?
+  episode       Int?
+  language      String
+  release       String?
+  fileName      String    @map("file_name")
+  hash          String?
+  downloadUrl   String    @map("download_url")
+  cachedPath    String?   @map("cached_path")
+  cached        Boolean   @default(false)
+  lastVerified  DateTime? @map("last_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  anime         Anime     @relation(fields: [animeId], references: [id], onDelete: Cascade)
+
+  @@unique([animeId, season, episode, language, fileName])
+  @@index([animeId, season, episode])
+  @@index([language])
+  @@index([hash])
+  @@map("subtitles")
+}
+
+model SyncState {
+  id             String    @id @default("default")
+  lastSync       DateTime? @map("last_sync")
+  lastDirectory  String?   @map("last_directory")
+  status         String    @default("idle")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("sync_state")
+}
