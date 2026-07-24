@@ -49,13 +49,19 @@ export async function resolveSubtitles(
 
   const baseUrl = publicBaseUrl();
 
-  const subtitles: SubtitleSchema[] = rows.map((row) => ({
-    id: row.id,
-    lang: row.language,
-    // Trailing .ass is required for stremio-video ASS track detection
-    // (see subtitleTypes.hasASSExtension in the ass-support fork).
-    url: `${baseUrl}/subtitle/${row.id}.ass`,
-  }));
+  // `label` is supported by stremio-core (optional) and is what the player
+  // menu displays when present. Official zod schema omits it, so we extend.
+  const subtitles: Array<SubtitleSchema & { label: string }> = rows.map(
+    (row) => ({
+      id: row.id,
+      lang: row.language,
+      label: row.fileName,
+      // Trailing .ass is required for stremio-video ASS track detection
+      // (see subtitleTypes.hasASSExtension in the ass-support fork).
+      // Proxy lookup still uses the stable internal cuid.
+      url: `${baseUrl}/subtitle/${row.id}.ass`,
+    }),
+  );
 
   logger.info("subtitle hit", {
     imdbId: args.imdbId,
