@@ -9,6 +9,7 @@ import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
 import { createConfigRouter } from "./config/router.js";
 import { startBackgroundCrawler } from "./crawler/start.js";
+import { isDatabaseConfigured } from "./db/client.js";
 import { resolveEraiClient } from "./erai/resolve.js";
 import { createSubtitleProxyHandler } from "./subtitle/serve.js";
 import { logger } from "./utils/logger.js";
@@ -37,6 +38,14 @@ app.use(
   }),
 );
 
+// Always-on health endpoint so Beamup/Dokku healthchecks pass before secrets.
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    database: isDatabaseConfigured(),
+  });
+});
+
 app.use(express.static(publicDir));
 app.use(createConfigRouter());
 
@@ -55,8 +64,16 @@ app.get("/", (_req, res) => {
 app.listen(port, () => {
   logger.info("addon listening", {
     port,
+    database: isDatabaseConfigured(),
     manifest: `http://127.0.0.1:${port}/manifest.json`,
   });
+
+  if (!isDatabaseConfigured()) {
+    logger.warn(
+      "DATABASE_URL missing — waiting for beamup secrets; crawler disabled",
+    );
+    return;
+  }
 
   // Crawl never runs inside subtitle request handlers — only as a
   // background loop in this process (or via npm run crawl:worker).

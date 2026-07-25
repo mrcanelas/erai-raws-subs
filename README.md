@@ -56,6 +56,8 @@ This repo ships a **Dockerfile**. Beamup’s Dockerfile buildpack is selected wh
 beamup
 ```
 
+Beamup only accepts `beamup secrets` **after** the first successful deploy. This project boots without `DATABASE_URL` so Dokku healthchecks can pass; set secrets next, then redeploy so Prisma can apply the schema.
+
 Set secrets (replace the public URL with the one Beamup prints):
 
 ```bash
@@ -65,17 +67,28 @@ beamup secrets ERAI_USERNAME "your-erai-email"
 beamup secrets ERAI_PASSWORD "your-erai-password"
 beamup secrets ADDON_PUBLIC_URL "https://<github-user>-erai-raws-subs-docker.a.baby-beamup.club"
 beamup secrets CONFIGURATION_REQUIRED "true"
+beamup
+```
+
+Alternative if `beamup secrets` is still unavailable: set env over SSH (Dokku):
+
+```bash
+ssh dokku@a.baby-beamup.club config:set 94c8cb9f702d/erai-raws-subs-docker \
+  DATABASE_URL="postgresql://..." \
+  CONFIG_SECRET="..." \
+  ERAI_USERNAME="..." \
+  ERAI_PASSWORD="..." \
+  ADDON_PUBLIC_URL="https://..." \
+  CONFIGURATION_REQUIRED="true"
 ```
 
 - `CONFIG_SECRET` — encrypts user credentials from `/configure`
 - `ERAI_USERNAME` / `ERAI_PASSWORD` — **crawler** indexing only (not sent to Stremio)
 - `CONFIGURATION_REQUIRED=true` — Stremio still opens `/configure` even with crawler secrets
 
-Redeploy after secrets:
+Check logs:
 
 ```bash
-beamup
-# or: git push beamup master
 beamup logs
 ```
 
