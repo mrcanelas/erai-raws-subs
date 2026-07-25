@@ -1,7 +1,9 @@
 import type { ContentTypeSchema, SubtitleSchema } from "@stremio-addon/zod";
+import { getConfigByToken } from "../config/store.js";
 import { prisma } from "../db/client.js";
 import { logger } from "../utils/logger.js";
 import { publicBaseUrl } from "../utils/url.js";
+import { applyLanguagePreferences } from "./preferences.js";
 
 export type ResolveSubtitlesArgs = {
   type: ContentTypeSchema;
@@ -54,7 +56,7 @@ export async function resolveSubtitles(
 
   // `label` is supported by stremio-core (optional) and is what the player
   // menu displays when present. Official zod schema omits it, so we extend.
-  const subtitles: Array<SubtitleSchema & { label: string }> = rows.map(
+  const mapped: Array<SubtitleSchema & { label: string }> = rows.map(
     (row) => ({
       // fileName in id/label helps users pick between same-language tracks.
       id: row.fileName,
@@ -66,11 +68,26 @@ export async function resolveSubtitles(
     }),
   );
 
+  const prefs = args.token
+    ? await getConfigByToken(args.token).then((config) =>
+        config
+          ? {
+              preferredLanguage: config.preferredLanguage,
+              preferredOnly: config.preferredOnly,
+            }
+          : undefined,
+      )
+    : undefined;
+
+  const subtitles = applyLanguagePreferences(mapped, prefs);
+
   logger.info("subtitle hit", {
     imdbId: args.imdbId,
     season,
     episode,
     count: subtitles.length,
+    preferredLanguage: prefs?.preferredLanguage,
+    preferredOnly: prefs?.preferredOnly,
   });
 
   return subtitles;
