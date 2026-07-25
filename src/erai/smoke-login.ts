@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { EraiClient } from "./client.js";
 import { hasWordPressLoginCookie } from "./cookies.js";
+import { ENV_SESSION_ID } from "./singleton.js";
 import { logger } from "../utils/logger.js";
 
 async function main(): Promise<void> {
@@ -13,7 +14,7 @@ async function main(): Promise<void> {
 
   const client = await EraiClient.create({
     credentials: { username, password },
-    cookiePath: process.env.ERAI_COOKIE_PATH ?? ".cache/erai-cookies.json",
+    sessionId: ENV_SESSION_ID,
   });
 
   await client.init();

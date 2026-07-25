@@ -91,7 +91,7 @@ async function main(): Promise<void> {
   const client = await EraiClient.create({
     baseUrl: process.env.ERAI_BASE_URL,
     credentials: { username, password },
-    cookiePath: process.env.ERAI_COOKIE_PATH ?? ".cache/erai-cookies.json",
+    sessionId: "env",
   });
 
   const crawler = new EraiCrawler(client, prisma);

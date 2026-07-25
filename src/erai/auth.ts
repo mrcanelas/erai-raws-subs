@@ -15,7 +15,7 @@ export async function login(
   jar: CookieJar,
   credentials: EraiCredentials,
   baseUrl: string,
-  cookiePath?: string,
+  sessionId?: string,
 ): Promise<void> {
   logger.info("erai login starting");
 
@@ -68,7 +68,7 @@ export async function login(
     );
   }
 
-  await saveCookieJar(jar, cookiePath);
+  await saveCookieJar(jar, sessionId);
   logger.info("erai login succeeded", { statusCode: response.statusCode });
 }
 
@@ -77,14 +77,14 @@ export async function ensureSession(
   jar: CookieJar,
   credentials: EraiCredentials,
   baseUrl: string,
-  cookiePath?: string,
+  sessionId?: string,
 ): Promise<void> {
   if (await hasWordPressLoginCookie(jar, baseUrl)) {
     logger.debug("erai session cookie present");
     return;
   }
 
-  await login(http, jar, credentials, baseUrl, cookiePath);
+  await login(http, jar, credentials, baseUrl, sessionId);
 }
 
 export async function renewSession(
@@ -92,8 +92,8 @@ export async function renewSession(
   jar: CookieJar,
   credentials: EraiCredentials,
   baseUrl: string,
-  cookiePath?: string,
+  sessionId?: string,
 ): Promise<void> {
   logger.warn("erai session renewing");
-  await login(http, jar, credentials, baseUrl, cookiePath);
+  await login(http, jar, credentials, baseUrl, sessionId);
 }

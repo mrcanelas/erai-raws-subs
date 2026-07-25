@@ -22,14 +22,14 @@ export class EraiClient {
   readonly baseUrl: string;
   readonly jar: CookieJar;
   private readonly credentials: EraiCredentials;
-  private readonly cookiePath?: string;
+  private readonly sessionId?: string;
   private readonly http: Got;
   private ready: Promise<void> | null = null;
 
   private constructor(options: EraiClientOptions, jar: CookieJar) {
     this.baseUrl = options.baseUrl ?? ERAI_BASE_URL;
     this.credentials = options.credentials;
-    this.cookiePath = options.cookiePath;
+    this.sessionId = options.sessionId;
     this.jar = jar;
 
     const prefix = this.baseUrl.endsWith("/")
@@ -57,7 +57,7 @@ export class EraiClient {
   }
 
   static async create(options: EraiClientOptions): Promise<EraiClient> {
-    const jar = await loadCookieJar(options.cookiePath);
+    const jar = await loadCookieJar(options.sessionId);
     return new EraiClient(options, jar);
   }
 
@@ -68,7 +68,7 @@ export class EraiClient {
         this.jar,
         this.credentials,
         this.baseUrl,
-        this.cookiePath,
+        this.sessionId,
       );
     }
 
@@ -123,7 +123,7 @@ export class EraiClient {
         this.jar,
         this.credentials,
         this.baseUrl,
-        this.cookiePath,
+        this.sessionId,
       );
       return this.requestText(pathnameOrUrl, false);
     }
@@ -132,7 +132,7 @@ export class EraiClient {
       throw new EraiHttpError(response.statusCode, response.url);
     }
 
-    await saveCookieJar(this.jar, this.cookiePath);
+    await saveCookieJar(this.jar, this.sessionId);
     return response;
   }
 
@@ -164,7 +164,7 @@ export class EraiClient {
         this.jar,
         this.credentials,
         this.baseUrl,
-        this.cookiePath,
+        this.sessionId,
       );
       return this.requestBuffer(pathnameOrUrl, false);
     }
@@ -173,7 +173,7 @@ export class EraiClient {
       throw new EraiHttpError(response.statusCode, response.url);
     }
 
-    await saveCookieJar(this.jar, this.cookiePath);
+    await saveCookieJar(this.jar, this.sessionId);
     return response;
   }
 

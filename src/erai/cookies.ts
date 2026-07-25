@@ -1,51 +1,57 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { CookieJar } from "tough-cookie";
+import { prisma } from "../db/client.js";
 import { logger } from "../utils/logger.js";
 
-export async function loadCookieJar(cookiePath?: string): Promise<CookieJar> {
-  if (!cookiePath) {
+/**
+ * Loads a CookieJar from Postgres (Beamup has no durable filesystem).
+ * `sessionId` is the configure token or `"env"` for the crawler client.
+ */
+export async function loadCookieJar(sessionId?: string): Promise<CookieJar> {
+  if (!sessionId) {
     return new CookieJar();
   }
 
   try {
-    const raw = await fs.readFile(cookiePath, "utf8");
-    const jar = CookieJar.fromJSON(raw);
-    logger.info("cookie jar loaded", { cookiePath });
-    return jar;
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? String((error as { code?: unknown }).code)
-        : undefined;
-
-    if (code !== "ENOENT") {
-      logger.warn("failed to load cookie jar; starting fresh", {
-        cookiePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    const row = await prisma.eraiSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!row?.jarJson) {
+      return new CookieJar();
     }
 
+    const jar = CookieJar.fromJSON(row.jarJson);
+    logger.info("cookie jar loaded", { sessionId });
+    return jar;
+  } catch (error) {
+    logger.warn("failed to load cookie jar; starting fresh", {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return new CookieJar();
   }
 }
 
 export async function saveCookieJar(
   jar: CookieJar,
-  cookiePath?: string,
+  sessionId?: string,
 ): Promise<void> {
-  if (!cookiePath) {
+  if (!sessionId) {
     return;
   }
 
-  await fs.mkdir(path.dirname(cookiePath), { recursive: true });
   const serialized = jar.toJSON();
   if (!serialized) {
-    logger.warn("cookie jar serialization returned empty", { cookiePath });
+    logger.warn("cookie jar serialization returned empty", { sessionId });
     return;
   }
-  await fs.writeFile(cookiePath, JSON.stringify(serialized, null, 2), "utf8");
-  logger.debug("cookie jar saved", { cookiePath });
+
+  const jarJson = JSON.stringify(serialized);
+  await prisma.eraiSession.upsert({
+    where: { id: sessionId },
+    create: { id: sessionId, jarJson },
+    update: { jarJson },
+  });
+  logger.debug("cookie jar saved", { sessionId });
 }
 
 export async function hasWordPressLoginCookie(

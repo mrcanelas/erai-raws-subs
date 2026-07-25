@@ -12,8 +12,11 @@ export type EraiClientOptions = {
   baseUrl?: string;
   credentials: EraiCredentials;
   userAgent?: string;
-  /** Optional path to persist the CookieJar as JSON between runs. */
-  cookiePath?: string;
+  /**
+   * Opaque session key used to persist the CookieJar in Postgres
+   * (configure token, or `"env"` for the crawler / single-tenant client).
+   */
+  sessionId?: string;
   timeoutMs?: number;
 };
 
