@@ -5,8 +5,9 @@ import cors from "cors";
 import express from "express";
 import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
+import { createConfigRouter } from "./config/router.js";
 import { startBackgroundCrawler } from "./crawler/start.js";
-import { getEraiClient } from "./erai/singleton.js";
+import { resolveEraiClient } from "./erai/resolve.js";
 import { createSubtitleProxyHandler } from "./subtitle/serve.js";
 import { logger } from "./utils/logger.js";
 
@@ -29,10 +30,14 @@ app.use(
   }),
 );
 
-app.get(
-  "/subtitle/:id",
-  createSubtitleProxyHandler(() => getEraiClient()),
+app.use(createConfigRouter());
+
+const subtitleProxy = createSubtitleProxyHandler((token) =>
+  resolveEraiClient(token),
 );
+// Tenant-scoped and env-fallback (dev) subtitle proxy routes.
+app.get("/subtitle/:token/:id", subtitleProxy);
+app.get("/subtitle/:id", subtitleProxy);
 
 app.use("/", getRouter(addonInterface));
 app.get("/", (_req, res) => {

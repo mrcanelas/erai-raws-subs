@@ -1,22 +1,23 @@
 import type { ContentTypeSchema, SubtitleSchema } from "@stremio-addon/zod";
 import { prisma } from "../db/client.js";
 import { logger } from "../utils/logger.js";
+import { publicBaseUrl } from "../utils/url.js";
 
 export type ResolveSubtitlesArgs = {
   type: ContentTypeSchema;
   imdbId: string;
   season?: number;
   episode?: number;
+  /** Tenant token embedded in proxy URLs so the proxy can pick credentials. */
+  token?: string;
 };
 
-function publicBaseUrl(): string {
-  const configured = process.env.ADDON_PUBLIC_URL?.replace(/\/+$/, "");
-  if (configured) {
-    return configured;
-  }
-
-  const port = Number(process.env.PORT) || 7000;
-  return `http://127.0.0.1:${port}`;
+function proxyPath(id: string, token?: string): string {
+  // Trailing .ass is required for stremio-video ASS track detection
+  // (see subtitleTypes.hasASSExtension in the ass-support fork).
+  return token
+    ? `/subtitle/${encodeURIComponent(token)}/${id}.ass`
+    : `/subtitle/${id}.ass`;
 }
 
 /**
@@ -55,13 +56,13 @@ export async function resolveSubtitles(
   // menu displays when present. Official zod schema omits it, so we extend.
   const subtitles: Array<SubtitleSchema & { label: string }> = rows.map(
     (row) => ({
-      id: row.id,
+      // fileName in id/label helps users pick between same-language tracks.
+      id: row.fileName,
       lang: row.language,
       label: row.fileName,
-      // Trailing .ass is required for stremio-video ASS track detection
-      // (see subtitleTypes.hasASSExtension in the ass-support fork).
-      // Proxy lookup still uses the stable internal cuid.
-      url: `${baseUrl}/subtitle/${row.id}.ass`,
+      // Proxy lookup still uses the stable internal cuid; the tenant token
+      // (when present) lets the proxy authenticate with the right account.
+      url: `${baseUrl}${proxyPath(row.id, args.token)}`,
     }),
   );
 

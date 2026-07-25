@@ -40,9 +40,18 @@ export function parseSubtitleId(id: string): ParsedSubtitleId | null {
   return { imdbId };
 }
 
+function tokenFromConfig(config: unknown): string | undefined {
+  if (!config || typeof config !== "object") {
+    return undefined;
+  }
+  const raw = (config as Record<string, unknown>).t;
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
 export async function handleSubtitlesRequest(args: {
   type: ContentTypeSchema;
   id: string;
+  config?: unknown;
 }): Promise<SubtitlesResponseSchema> {
   const parsed = parseSubtitleId(args.id);
 
@@ -54,11 +63,14 @@ export async function handleSubtitlesRequest(args: {
     return { subtitles: [] };
   }
 
+  const token = tokenFromConfig(args.config);
+
   logger.info("subtitle lookup", {
     type: args.type,
     imdbId: parsed.imdbId,
     season: parsed.season,
     episode: parsed.episode,
+    configured: Boolean(token),
   });
 
   const subtitles = await resolveSubtitles({
@@ -66,6 +78,7 @@ export async function handleSubtitlesRequest(args: {
     imdbId: parsed.imdbId,
     season: parsed.season,
     episode: parsed.episode,
+    token,
   });
 
   return { subtitles };

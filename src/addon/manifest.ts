@@ -1,5 +1,11 @@
 import type { ManifestSchema } from "@stremio-addon/zod";
 
+function hasEnvCredentials(): boolean {
+  return Boolean(
+    process.env.ERAI_USERNAME?.trim() && process.env.ERAI_PASSWORD?.trim(),
+  );
+}
+
 export const manifest: ManifestSchema = {
   id: "com.erai-raws.subs",
   version: "0.1.0",
@@ -10,4 +16,10 @@ export const manifest: ManifestSchema = {
   types: ["series", "movie"],
   catalogs: [],
   idPrefixes: ["tt"],
+  behaviorHints: {
+    configurable: true,
+    // Force configuration in production; dev installs with env creds stay
+    // directly installable.
+    configurationRequired: !hasEnvCredentials(),
+  },
 };
