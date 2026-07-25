@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-import { promises as fs } from "node:fs";
 import { prisma } from "../db/client.js";
 import type { EraiClient } from "../erai/client.js";
 import { UnknownConfigTokenError } from "../erai/resolve.js";
@@ -30,20 +29,15 @@ export function createSubtitleProxyHandler(resolveClient: EraiClientResolver) {
 
     try {
       const client = await resolveClient(token);
-      const { absolutePath, fromCache } = await ensureSubtitleCached(
-        client,
-        subtitle,
-      );
+      const { buffer, fromCache } = await ensureSubtitleCached(client, subtitle);
 
       logger.info("serving subtitle", {
         subtitleId: id,
         fromCache,
         language: subtitle.language,
         configured: Boolean(token),
+        bytes: buffer.byteLength,
       });
-
-      // Serve raw bytes so libass-wasm / ASS detection can sniff content.
-      const body = await fs.readFile(absolutePath);
 
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
@@ -55,9 +49,9 @@ export function createSubtitleProxyHandler(resolveClient: EraiClientResolver) {
         `inline; filename="${subtitle.fileName.replace(/"/g, "")}"`,
       );
       res.setHeader("Cache-Control", "public, max-age=86400");
-      res.setHeader("Content-Length", String(body.byteLength));
+      res.setHeader("Content-Length", String(buffer.byteLength));
 
-      res.status(200).end(body);
+      res.status(200).end(buffer);
     } catch (error) {
       if (error instanceof UnknownConfigTokenError) {
         logger.warn("subtitle proxy rejected unknown token", { subtitleId: id });
