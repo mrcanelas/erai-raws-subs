@@ -4,7 +4,7 @@ Stremio subtitle addon that serves **ASS** subtitles from [Erai-Raws](https://ww
 
 Credentials never leave the server. Stremio only receives an opaque config token.
 
-The addon is **stateless**: subtitle bytes and Erai sessions live in **PostgreSQL** (gzip `BYTEA` + cookie jars). Suitable for [Beamup](https://github.com/Stremio/stremio-beamup-cli) (ephemeral disk).
+Subtitles and Erai sessions are stored in **PostgreSQL** (gzip `BYTEA` + cookie jars). The crawler runs **inside** the addon process.
 
 ## Local development
 
@@ -28,71 +28,88 @@ Generate `CONFIG_SECRET`:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Deploy on Beamup
+## Deploy on OVHcloud (recommended)
 
-Beamup is free Stremio hosting (Dokku). Disk is ephemeral — use Neon for persistence.
+Stack: **Docker Compose** (addon + Caddy) with automatic HTTPS. Crawler is enabled in-process (`CRAWL_ENABLED=true`).
 
-### Prerequisites
+### 1. Create the VPS
 
-- GitHub account with an SSH key
-- Neon `DATABASE_URL`
-- [beamup-cli](https://github.com/Stremio/stremio-beamup-cli)
+- Plan: **VPS-1 2027** (2 vCPU / 4 GB / 40 GB NVMe is enough)
+- OS: **Ubuntu 24.04**
+- Open firewall / security group for **TCP 22, 80, 443**
 
-```bash
-npm install -g beamup-cli
-beamup config
-# Host: a.baby-beamup.club
-# GitHub username: yours
-```
+### 2. Point DNS
 
-### App name
+Create an `A` record for your domain (e.g. `erai.example.com`) to the VPS public IPv4. Wait for propagation before starting Caddy.
 
-This repo ships a **Dockerfile**. Beamup’s Dockerfile buildpack is selected when the project name contains `docker`, e.g. `erai-raws-subs-docker`.
-
-### Deploy
+### 3. Install Docker on the VPS
 
 ```bash
-# From the repo root — first run creates the Beamup app + git remote
-beamup
+sudo apt update
+sudo apt install -y ca-certificates curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+# log out and back in so docker works without sudo
 ```
 
-Beamup only accepts `beamup secrets` **after** the first successful deploy. This project boots without `DATABASE_URL` so Dokku healthchecks can pass; set secrets next, then redeploy so Prisma can apply the schema.
-
-Set secrets (replace the public URL with the one Beamup prints):
+### 4. Clone and configure
 
 ```bash
-beamup secrets DATABASE_URL "postgresql://USER:PASSWORD@HOST/DB?sslmode=require"
-beamup secrets CONFIG_SECRET "$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
-beamup secrets ERAI_USERNAME "your-erai-email"
-beamup secrets ERAI_PASSWORD "your-erai-password"
-beamup secrets ADDON_PUBLIC_URL "https://<github-user>-erai-raws-subs-docker.a.baby-beamup.club"
-beamup secrets CONFIGURATION_REQUIRED "true"
-beamup
+git clone https://github.com/mrcanelas/erai-raws-subs.git
+cd erai-raws-subs
+cp .env.example .env
+nano .env
 ```
 
-Alternative if `beamup secrets` is still unavailable: set env over SSH (Dokku):
+Fill at least:
 
 ```bash
-ssh dokku@a.baby-beamup.club config:set 94c8cb9f702d/erai-raws-subs-docker \
-  DATABASE_URL="postgresql://..." \
-  CONFIG_SECRET="..." \
-  ERAI_USERNAME="..." \
-  ERAI_PASSWORD="..." \
-  ADDON_PUBLIC_URL="https://..." \
-  CONFIGURATION_REQUIRED="true"
+DOMAIN=erai.example.com
+ACME_EMAIL=you@example.com
+ADDON_PUBLIC_URL=https://erai.example.com
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
+CONFIG_SECRET=...          # long random hex
+ERAI_USERNAME=...          # crawler account
+ERAI_PASSWORD=...
+CONFIGURATION_REQUIRED=true
+CRAWL_ENABLED=true
+CRAWL_RUN_ON_START=true
 ```
 
-- `CONFIG_SECRET` — encrypts user credentials from `/configure`
-- `ERAI_USERNAME` / `ERAI_PASSWORD` — **crawler** indexing only (not sent to Stremio)
-- `CONFIGURATION_REQUIRED=true` — Stremio still opens `/configure` even with crawler secrets
-
-Check logs:
+### 5. Start
 
 ```bash
-beamup logs
+docker compose up -d --build
+docker compose logs -f
 ```
 
-Open `https://<your-addon>.a.baby-beamup.club/configure`, sign in, install the Stremio link.
+Caddy issues the Let's Encrypt certificate on first boot (~30s after DNS is correct).
+
+### 6. Verify
+
+```bash
+curl -I https://erai.example.com/health
+curl -I https://erai.example.com/manifest.json
+curl -I https://erai.example.com/configure
+```
+
+Open `/configure`, sign in with your Erai account, install the Stremio link.
+
+### Updating
+
+```bash
+cd erai-raws-subs
+git pull
+docker compose up -d --build
+```
+
+### Useful commands
+
+```bash
+docker compose ps
+docker compose logs -f addon
+docker compose restart addon
+```
 
 ## Cache layers
 
@@ -106,3 +123,4 @@ Sessions (`erai_session`) are also stored in Postgres so logins survive containe
 
 - Subtitle requests never crawl Erai; the indexer runs on a schedule inside the addon process.
 - Changing `CONFIG_SECRET` invalidates all stored configure tokens.
+- Neon (or any Postgres) is required; the VPS disk is only for Docker/Caddy state.

@@ -1,0 +1,9 @@
+# Automatic HTTPS via Let's Encrypt (OVHcloud / any VPS).
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy addon:8080
+}

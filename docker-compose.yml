@@ -1,0 +1,48 @@
+services:
+  addon:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "8080"
+      NODE_ENV: production
+      ADDON_PUBLIC_URL: "https://${DOMAIN}"
+      CONFIGURATION_REQUIRED: "true"
+      CRAWL_ENABLED: "true"
+      CRAWL_RUN_ON_START: "true"
+      IMDB_MAPPING_PATH: "/tmp/imdb_mapping.json"
+    expose:
+      - "8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      addon:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN}"
+      ACME_EMAIL: "${ACME_EMAIL}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

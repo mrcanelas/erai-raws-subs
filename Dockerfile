@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Beamup (Dokku) Docker buildpack — keep "docker" in the Beamup app name.
+# Used by OVHcloud (docker compose) and Beamup (Dokku Dockerfile buildpack).
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
