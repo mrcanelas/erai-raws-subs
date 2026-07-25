@@ -200,7 +200,6 @@ export class EraiCrawler {
             episode: episode.episode,
             language,
             fileName: entry.name,
-            cached: false,
             ...data,
           },
         });

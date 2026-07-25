@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -33,27 +33,49 @@ model Anime {
 }
 
 model Subtitle {
-  id            String    @id @default(cuid())
-  animeId       String    @map("anime_id")
+  id            String         @id @default(cuid())
+  animeId       String         @map("anime_id")
   season        Int?
   episode       Int?
   language      String
   release       String?
-  fileName      String    @map("file_name")
+  fileName      String         @map("file_name")
   hash          String?
-  downloadUrl   String    @map("download_url")
-  cachedPath    String?   @map("cached_path")
-  cached        Boolean   @default(false)
-  lastVerified  DateTime? @map("last_verified")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  anime         Anime     @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  downloadUrl   String         @map("download_url")
+  cacheId       String?        @unique @map("cache_id")
+  lastVerified  DateTime?      @map("last_verified")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  anime         Anime          @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  cache         SubtitleCache? @relation(fields: [cacheId], references: [id], onDelete: SetNull)
 
   @@unique([animeId, season, episode, language, fileName])
   @@index([animeId, season, episode])
   @@index([language])
   @@index([hash])
   @@map("subtitles")
+}
+
+/// Gzipped ASS bytes. Survives Beamup container restarts (external Postgres).
+model SubtitleCache {
+  id             String    @id @default(cuid())
+  content        Bytes
+  compression    String    @default("gzip")
+  size           Int
+  createdAt      DateTime  @default(now()) @map("created_at")
+  lastAccessedAt DateTime  @default(now()) @map("last_accessed_at")
+  subtitle       Subtitle?
+
+  @@map("subtitle_cache")
+}
+
+/// Serialized tough-cookie CookieJar per tenant (token) or "env" for the crawler.
+model EraiSession {
+  id        String   @id
+  jarJson   String   @map("jar_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("erai_session")
 }
 
 model AddonConfig {
