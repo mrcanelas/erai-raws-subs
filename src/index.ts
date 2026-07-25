@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { AddonBuilder } from "@stremio-addon/zod";
 import { getRouter } from "@stremio-addon/node-express";
 import cors from "cors";
@@ -22,6 +24,11 @@ const addonInterface = builder.getInterface();
 const app = express();
 const port = Number(process.env.PORT) || 7000;
 const crawlerAbort = new AbortController();
+const publicDir = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "public",
+);
 
 app.use(
   cors({
@@ -30,6 +37,7 @@ app.use(
   }),
 );
 
+app.use(express.static(publicDir));
 app.use(createConfigRouter());
 
 const subtitleProxy = createSubtitleProxyHandler((token) =>

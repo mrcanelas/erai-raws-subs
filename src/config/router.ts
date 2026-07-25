@@ -14,7 +14,7 @@ import { createAddonConfig } from "./store.js";
 function formValues(body: Record<string, unknown> = {}): ConfigureFormValues {
   return {
     username: String(body.username ?? "").trim() || undefined,
-    preferredLanguage: String(body.preferredLanguage ?? "por").trim() || "por",
+    preferredLanguage: String(body.preferredLanguage ?? "eng").trim() || "eng",
     preferredOnly: String(body.preferredOnly ?? "1") !== "0",
   };
 }
@@ -35,7 +35,7 @@ async function handleSubmit(req: Request, res: Response): Promise<void> {
     sendPage(
       res,
       {
-        error: "Informe e-mail e senha da conta Erai-Raws.",
+        error: "Enter your Erai-Raws email and password.",
         values,
       },
       400,
@@ -48,7 +48,7 @@ async function handleSubmit(req: Request, res: Response): Promise<void> {
       res,
       {
         error:
-          "O servidor está sem CONFIG_SECRET. Peça ao administrador para configurar.",
+          "CONFIG_SECRET is missing on this server. Ask the administrator to configure it.",
         values,
       },
       500,
@@ -89,7 +89,7 @@ async function handleSubmit(req: Request, res: Response): Promise<void> {
       sendPage(
         res,
         {
-          error: "Falha no login do Erai-Raws. Verifique e-mail e senha.",
+          error: "Invalid email or password. Please try again.",
           values,
         },
         401,
@@ -103,7 +103,7 @@ async function handleSubmit(req: Request, res: Response): Promise<void> {
     sendPage(
       res,
       {
-        error: "Erro inesperado ao validar as credenciais.",
+        error: "Unexpected error while validating credentials.",
         values,
       },
       502,

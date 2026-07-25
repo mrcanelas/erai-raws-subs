@@ -10,6 +10,7 @@ export const manifest: ManifestSchema = {
   id: "com.erai-raws.subs",
   version: "0.1.0",
   name: "Erai-Raws Subs",
+  logo: "https://i.imgur.com/o9ourQq.png",
   description:
     "ASS subtitles from Erai-Raws (styled karaoke, signs, fonts)",
   resources: ["subtitles"],
