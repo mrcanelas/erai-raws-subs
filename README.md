@@ -83,7 +83,7 @@ Open `/configure`, sign in, install the Stremio link.
 
 ### Cron notes
 
-- Schedule in `vercel.json`: `0 */6 * * *` (every 6 hours). Hobby plans may only allow daily crons — adjust the schedule if deploy validation fails.
+- Schedule in `vercel.json`: `0 6 * * *` (once daily, Hobby-compatible). Pro unlocks more frequent crons.
 - Each run indexes until `CRAWL_BUDGET_MS` elapses, then stops cleanly; the next Cron continues.
 
 ## Deploy on OVHcloud (optional VPS)
