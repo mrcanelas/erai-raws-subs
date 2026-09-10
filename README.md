@@ -4,7 +4,7 @@ Stremio subtitle addon that serves **ASS** subtitles from [Erai-Raws](https://ww
 
 Credentials never leave the server. Stremio only receives an opaque config token.
 
-Subtitles and Erai sessions are stored in **PostgreSQL** (gzip `BYTEA` + cookie jars). The crawler runs **inside** the addon process.
+Subtitles and Erai sessions are stored in **PostgreSQL** (gzip `BYTEA` + cookie jars).
 
 ## Local development
 
@@ -13,7 +13,7 @@ Subtitles and Erai sessions are stored in **PostgreSQL** (gzip `BYTEA` + cookie 
 
 ```bash
 cp .env.example .env
-# DATABASE_URL, ERAI_USERNAME, ERAI_PASSWORD, CONFIG_SECRET
+# DATABASE_URL, ERAI_USERNAME, ERAI_PASSWORD, CONFIG_SECRET, CRON_SECRET
 npm install
 npx prisma db push
 npm run dev
@@ -22,105 +22,90 @@ npm run dev
 - Configure UI: http://127.0.0.1:7000/configure
 - Manifest: http://127.0.0.1:7000/manifest.json
 
-Generate `CONFIG_SECRET`:
+Generate secrets:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Deploy on OVHcloud (recommended)
+## Deploy on Vercel (Container Function) — recommended
 
-Stack: **Docker Compose** (addon + Caddy) with automatic HTTPS. Crawler is enabled in-process (`CRAWL_ENABLED=true`).
+Uses [`Dockerfile.vercel`](./Dockerfile.vercel): Vercel builds an OCI image, stores it in Vercel Container Registry, and serves it as a Fluid Function.
 
-### 1. Create the VPS
+The container **scales to zero**, so the crawler is **not** an in-process loop. Vercel Cron calls `GET /api/cron/crawl` every 6 hours with a soft time budget (`CRAWL_BUDGET_MS`, default 4 minutes). Progress is incremental across runs.
 
-- Plan: **VPS-1 2027** (2 vCPU / 4 GB / 40 GB NVMe is enough)
-- OS: **Ubuntu 24.04**
-- Open firewall / security group for **TCP 22, 80, 443**
+### Prerequisites
 
-### 2. Point DNS
+- Vercel project (Pro recommended for frequent crons / longer `maxDuration`)
+- Neon `DATABASE_URL`
+- Docker available locally only if you use `vercel dev`
 
-Create an `A` record for your domain (e.g. `erai.example.com`) to the VPS public IPv4. Wait for propagation before starting Caddy.
+### 1. Import the repo
 
-### 3. Install Docker on the VPS
+Connect the GitHub repo in the Vercel dashboard (or `vercel link`).
+
+### 2. Environment variables
+
+Set for Production (and Preview if needed):
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Neon connection string (`?sslmode=require`) |
+| `CONFIG_SECRET` | Long random hex |
+| `CRON_SECRET` | Same value Vercel Cron will send as `Authorization: Bearer …` |
+| `ERAI_USERNAME` / `ERAI_PASSWORD` | Crawler account |
+| `ADDON_PUBLIC_URL` | `https://<project>.vercel.app` (or custom domain) |
+| `CONFIGURATION_REQUIRED` | `true` |
+| `CRAWL_ENABLED` | `false` (Dockerfile already sets this) |
+| `CRAWL_ROOT_DIRECTORY` | e.g. `Sub` or `Sub/2026` |
+| `CRAWL_BUDGET_MS` | `240000` (stay under Function max duration) |
+
+Vercel automatically injects `CRON_SECRET` into Cron invocations when you define it in project settings — ensure the Cron job Authorization header matches (`Bearer $CRON_SECRET`). With `vercel.json` crons, Vercel sends `Authorization: Bearer <CRON_SECRET>` when `CRON_SECRET` is set.
+
+### 3. Deploy
 
 ```bash
-sudo apt update
-sudo apt install -y ca-certificates curl
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"
-# log out and back in so docker works without sudo
+git push
+# or: vercel --prod
 ```
 
-### 4. Clone and configure
+Vercel detects `Dockerfile.vercel`, builds the image, and routes all traffic to it.
+
+### 4. Verify
 
 ```bash
-git clone https://github.com/mrcanelas/erai-raws-subs.git
-cd erai-raws-subs
+curl -I https://your-project.vercel.app/health
+curl -I https://your-project.vercel.app/manifest.json
+curl -H "Authorization: Bearer $CRON_SECRET" https://your-project.vercel.app/api/cron/crawl
+```
+
+Open `/configure`, sign in, install the Stremio link.
+
+### Cron notes
+
+- Schedule in `vercel.json`: `0 */6 * * *` (every 6 hours). Hobby plans may only allow daily crons — adjust the schedule if deploy validation fails.
+- Each run indexes until `CRAWL_BUDGET_MS` elapses, then stops cleanly; the next Cron continues.
+
+## Deploy on OVHcloud (optional VPS)
+
+Long-lived Docker Compose with in-process crawler (`CRAWL_ENABLED=true`). See `docker-compose.yml` + `Caddyfile`.
+
+```bash
 cp .env.example .env
-nano .env
-```
-
-Fill at least:
-
-```bash
-DOMAIN=erai.example.com
-ACME_EMAIL=you@example.com
-ADDON_PUBLIC_URL=https://erai.example.com
-DATABASE_URL=postgresql://USER:PASSWORD@HOST/neondb?sslmode=require
-CONFIG_SECRET=...          # long random hex
-ERAI_USERNAME=...          # crawler account
-ERAI_PASSWORD=...
-CONFIGURATION_REQUIRED=true
-CRAWL_ENABLED=true
-CRAWL_RUN_ON_START=true
-```
-
-### 5. Start
-
-```bash
+# DOMAIN, ACME_EMAIL, DATABASE_URL, CONFIG_SECRET, ERAI_*, CRAWL_ENABLED=true
 docker compose up -d --build
-docker compose logs -f
-```
-
-Caddy issues the Let's Encrypt certificate on first boot (~30s after DNS is correct).
-
-### 6. Verify
-
-```bash
-curl -I https://erai.example.com/health
-curl -I https://erai.example.com/manifest.json
-curl -I https://erai.example.com/configure
-```
-
-Open `/configure`, sign in with your Erai account, install the Stremio link.
-
-### Updating
-
-```bash
-cd erai-raws-subs
-git pull
-docker compose up -d --build
-```
-
-### Useful commands
-
-```bash
-docker compose ps
-docker compose logs -f addon
-docker compose restart addon
 ```
 
 ## Cache layers
 
-1. **Memory LRU** — decompressed ASS (optional, disposable)
+1. **Memory LRU** — decompressed ASS (optional, disposable across cold starts)
 2. **PostgreSQL** — gzip-compressed ASS (`subtitle_cache`)
 3. **Erai-Raws** — origin on cache miss
 
-Sessions (`erai_session`) are also stored in Postgres so logins survive container restarts.
+Sessions (`erai_session`) live in Postgres so logins survive scale-to-zero.
 
 ## Architecture notes
 
-- Subtitle requests never crawl Erai; the indexer runs on a schedule inside the addon process.
+- Subtitle requests never crawl Erai.
+- On Vercel, indexing is Cron-driven (`/api/cron/crawl`).
 - Changing `CONFIG_SECRET` invalidates all stored configure tokens.
-- Neon (or any Postgres) is required; the VPS disk is only for Docker/Caddy state.

@@ -60,6 +60,7 @@ export class EraiCrawler {
   async crawl(options: CrawlOptions): Promise<CrawlStats> {
     const stats = createStats();
     const rootDirectory = options.rootDirectory.replace(/\/+$/, "");
+    const signal = options.signal;
 
     await this.updateSyncState("running", rootDirectory);
     logger.info("crawler started", {
@@ -68,15 +69,18 @@ export class EraiCrawler {
     });
 
     try {
-      await this.walk(rootDirectory, options.delayMs, stats);
+      await this.walk(rootDirectory, options.delayMs, stats, signal);
 
-      // Metadata lookups happen after indexing — never during subtitle requests.
-      await enrichAnimeMetadata(this.db, this.metadata, {
-        missingImdbOnly: true,
-        delayMs: Math.max(options.delayMs, 200),
-      });
+      const timedOut = Boolean(signal?.aborted);
+      if (!timedOut) {
+        // Metadata lookups happen after indexing — never during subtitle requests.
+        await enrichAnimeMetadata(this.db, this.metadata, {
+          missingImdbOnly: true,
+          delayMs: Math.max(options.delayMs, 200),
+        });
+      }
 
-      const status = stats.errors > 0 ? "error" : "idle";
+      const status = timedOut ? "idle" : stats.errors > 0 ? "error" : "idle";
       await this.db.syncState.upsert({
         where: { id: SYNC_STATE_ID },
         update: {
@@ -91,9 +95,22 @@ export class EraiCrawler {
         },
       });
 
-      logger.info("crawler finished", { rootDirectory, ...stats });
+      logger.info("crawler finished", {
+        rootDirectory,
+        aborted: timedOut,
+        ...stats,
+      });
       return stats;
     } catch (error) {
+      if (isAbortError(error)) {
+        await this.updateSyncState("idle", rootDirectory);
+        logger.info("crawler stopped by abort signal", {
+          rootDirectory,
+          ...stats,
+        });
+        return stats;
+      }
+
       await this.updateSyncState("error", rootDirectory);
       logger.error("crawler aborted", {
         rootDirectory,
@@ -107,14 +124,22 @@ export class EraiCrawler {
     directory: string,
     delayMs: number,
     stats: CrawlStats,
+    signal?: AbortSignal,
   ): Promise<void> {
+    if (signal?.aborted) {
+      return;
+    }
     if (this.visited.has(directory)) {
       return;
     }
     this.visited.add(directory);
 
     try {
-      await this.waitForRateLimit(delayMs);
+      await this.waitForRateLimit(delayMs, signal);
+      if (signal?.aborted) {
+        return;
+      }
+
       const query = `subs/?dir=${encodeURIComponent(directory)}`;
       const html = await this.client.getHtml(query);
       this.lastRequestAt = Date.now();
@@ -126,8 +151,12 @@ export class EraiCrawler {
       await this.ensureAnimeForDirectory(directory, stats);
 
       for (const entry of entries) {
+        if (signal?.aborted) {
+          return;
+        }
+
         if (entry.kind === "directory") {
-          await this.walk(entry.directory, delayMs, stats);
+          await this.walk(entry.directory, delayMs, stats, signal);
           continue;
         }
 
@@ -136,6 +165,9 @@ export class EraiCrawler {
         }
       }
     } catch (error) {
+      if (isAbortError(error) || signal?.aborted) {
+        return;
+      }
       stats.errors += 1;
       logger.error("crawler directory failed", {
         directory,
@@ -275,11 +307,43 @@ export class EraiCrawler {
     });
   }
 
-  private async waitForRateLimit(delayMs: number): Promise<void> {
+  private async waitForRateLimit(
+    delayMs: number,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const elapsed = Date.now() - this.lastRequestAt;
     const waitMs = Math.max(0, delayMs - elapsed);
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    if (waitMs <= 0) {
+      return;
     }
+
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, waitMs);
+
+      function onAbort(): void {
+        clearTimeout(timer);
+        reject(new DOMException("Crawl aborted", "AbortError"));
+      }
+
+      if (signal?.aborted) {
+        clearTimeout(timer);
+        onAbort();
+        return;
+      }
+
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === "AbortError") ||
+    (typeof DOMException !== "undefined" &&
+      error instanceof DOMException &&
+      error.name === "AbortError")
+  );
 }

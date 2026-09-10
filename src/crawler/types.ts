@@ -20,6 +20,8 @@ export type EpisodeInfo = {
 export type CrawlOptions = {
   rootDirectory: string;
   delayMs: number;
+  /** When aborted (e.g. Vercel Function budget), crawl stops and returns partial stats. */
+  signal?: AbortSignal;
 };
 
 export type CrawlStats = {

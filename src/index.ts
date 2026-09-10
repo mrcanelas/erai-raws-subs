@@ -8,6 +8,7 @@ import express from "express";
 import { manifest } from "./addon/manifest.js";
 import { handleSubtitlesRequest } from "./addon/subtitles.js";
 import { createConfigRouter } from "./config/router.js";
+import { handleCronCrawl } from "./crawler/cron.js";
 import { startBackgroundCrawler } from "./crawler/start.js";
 import { isDatabaseConfigured } from "./db/client.js";
 import { resolveEraiClient } from "./erai/resolve.js";
@@ -38,12 +39,20 @@ app.use(
   }),
 );
 
-// Always-on health endpoint so Beamup/Dokku healthchecks pass before secrets.
+// Always-on health endpoint so platform healthchecks pass before secrets.
 app.get("/health", (_req, res) => {
   res.status(200).json({
     ok: true,
     database: isDatabaseConfigured(),
   });
+});
+
+// Vercel Cron (and manual) crawl trigger — not an in-process loop.
+app.get("/api/cron/crawl", (req, res) => {
+  void handleCronCrawl(req, res);
+});
+app.post("/api/cron/crawl", (req, res) => {
+  void handleCronCrawl(req, res);
 });
 
 app.use(express.static(publicDir));
@@ -70,13 +79,13 @@ app.listen(port, () => {
 
   if (!isDatabaseConfigured()) {
     logger.warn(
-      "DATABASE_URL missing — waiting for beamup secrets; crawler disabled",
+      "DATABASE_URL missing — waiting for env configuration; crawler disabled",
     );
     return;
   }
 
   // Crawl never runs inside subtitle request handlers — only as a
-  // background loop in this process (or via npm run crawl:worker).
+  // background loop (OVH) or via /api/cron/crawl (Vercel).
   startBackgroundCrawler({ signal: crawlerAbort.signal });
 });
 
